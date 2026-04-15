@@ -17,6 +17,11 @@ type Conn = {
   last_ad_accounts_sync_at?: string | null
 }
 
+type UiApiError = {
+  status?: number
+  message?: string
+}
+
 function pickStr(r: Record<string, unknown>, ...keys: string[]): string {
   for (const k of keys) {
     const v = r[k]
@@ -29,6 +34,15 @@ function settingsMap(rows: { key: string; value: string }[]): Record<string, str
   const m: Record<string, string> = {}
   for (const r of rows) m[r.key] = r.value
   return m
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 export function MetaIntegrationsPage() {
@@ -61,6 +75,24 @@ export function MetaIntegrationsPage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false)
+  const trimmedAppId = metaAppId.trim()
+  const trimmedAppSecret = metaAppSecret.trim()
+  const trimmedRedirectUri = metaRedirectUri.trim()
+  const redirectUriValid = isValidHttpUrl(trimmedRedirectUri)
+  const metaConfigReady = trimmedAppId !== '' && trimmedAppSecret !== '' && redirectUriValid
+  const connectBlockedByConfig = canEditMetaConfig && (!metaConfigReady || configLoading)
+  const configValidationMessage =
+    trimmedRedirectUri !== '' && !redirectUriValid ? t(language, 'metaIntegrations.invalidRedirectUrl') : null
+
+  function errMessage(error: unknown, fallback: string): string {
+    const e = (error && typeof error === 'object' ? error : null) as UiApiError | null
+    const raw = (e?.message ?? '').trim()
+    const normalized = raw.toLowerCase()
+    if (normalized === 'server error') {
+      return `${t(language, 'metaIntegrations.serverErrorHint')} (${e?.status ?? 500})`
+    }
+    return raw !== '' ? raw : fallback
+  }
 
   const loadConnection = useCallback(async () => {
     try {
@@ -114,6 +146,10 @@ export function MetaIntegrationsPage() {
 
   async function saveMetaConfig() {
     if (!canEditMetaConfig) return
+    if (!metaConfigReady) {
+      setConfigMsg(t(language, 'metaIntegrations.fillRequiredMetaConfig'))
+      return
+    }
     setConfigBusy(true)
     setConfigMsg(null)
     try {
@@ -127,13 +163,35 @@ export function MetaIntegrationsPage() {
       })
       setConfigMsg(t(language, 'metaIntegrations.savedRestartHint'))
     } catch (e) {
-      setConfigMsg(e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : t(language, 'metaIntegrations.saveFail'))
+      setConfigMsg(errMessage(e, t(language, 'metaIntegrations.saveFail')))
     } finally {
       setConfigBusy(false)
     }
   }
 
+  async function testMetaConfig() {
+    if (connectBlockedByConfig) {
+      setConfigMsg(t(language, 'metaIntegrations.fillRequiredMetaConfig'))
+      return
+    }
+    setBusy('test-auth')
+    setConfigMsg(null)
+    try {
+      const res = (await api.get('/meta/auth-url')) as { data?: { url?: string } }
+      if (res?.data?.url) setConfigMsg(t(language, 'metaIntegrations.testConfigSuccess'))
+      else setConfigMsg(t(language, 'metaIntegrations.noOAuthUrl'))
+    } catch (e) {
+      setConfigMsg(errMessage(e, t(language, 'metaIntegrations.saveFail')))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function fetchAuthUrl() {
+    if (connectBlockedByConfig) {
+      setMsg(t(language, 'metaIntegrations.connectBlockedByConfig'))
+      return
+    }
     setBusy('auth')
     setMsg(null)
     try {
@@ -142,7 +200,7 @@ export function MetaIntegrationsPage() {
       if (url) window.open(url, '_blank', 'noopener,noreferrer')
       else setMsg(t(language, 'metaIntegrations.noOAuthUrl'))
     } catch (e) {
-      setMsg(e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : 'Failed')
+      setMsg(errMessage(e, 'Failed'))
     } finally {
       setBusy(null)
     }
@@ -358,7 +416,7 @@ export function MetaIntegrationsPage() {
         description={t(language, 'metaIntegrations.connectionDesc')}
         action={
           <div className="row-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
-            <button type="button" className="primary-btn" disabled={busy != null} onClick={() => void fetchAuthUrl()}>
+            <button type="button" className="primary-btn" disabled={busy != null || connectBlockedByConfig} onClick={() => void fetchAuthUrl()}>
               <ExternalLink size={16} /> {busy === 'auth' ? '…' : t(language, 'metaIntegrations.connectMeta')}
             </button>
             <button type="button" className="ghost-btn" disabled={busy != null || !connection?.connected} onClick={() => setDisconnectConfirmOpen(true)}>
@@ -426,6 +484,9 @@ export function MetaIntegrationsPage() {
               <button type="button" className="ghost-btn" disabled={configLoading || configBusy} onClick={() => void loadMetaConfig()}>
                 <RefreshCw size={16} /> {t(language, 'metaIntegrations.reload')}
               </button>
+              <button type="button" className="ghost-btn" disabled={configLoading || configBusy || busy != null || connectBlockedByConfig} onClick={() => void testMetaConfig()}>
+                <ExternalLink size={16} /> {busy === 'test-auth' ? '…' : t(language, 'metaIntegrations.testConfig')}
+              </button>
               <button type="button" className="primary-btn" disabled={configBusy || configLoading} onClick={() => void saveMetaConfig()}>
                 <KeyRound size={16} /> {configBusy ? '…' : t(language, 'metaIntegrations.saveConfig')}
               </button>
@@ -464,6 +525,7 @@ export function MetaIntegrationsPage() {
               </label>
             </div>
           )}
+          {configValidationMessage ? <p className="login-error" style={{ marginTop: 12 }}>{configValidationMessage}</p> : null}
           {configMsg ? <p className="type-caption muted" style={{ marginTop: 12 }}>{configMsg}</p> : null}
         </SectionCard>
       ) : null}

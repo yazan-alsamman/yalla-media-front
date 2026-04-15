@@ -62,6 +62,10 @@ export function TasksPage() {
   const [escalateId, setEscalateId] = useState<number | null>(null)
   const [escalateNote, setEscalateNote] = useState('')
   const [taskSearch, setTaskSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [taskTypeFilter, setTaskTypeFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [assigneeFilter, setAssigneeFilter] = useState('all')
 
   const isAdmin = role === 'admin' || role === 'super_admin'
   const canCreateTasks = role === 'super_admin'
@@ -79,15 +83,31 @@ export function TasksPage() {
 
   const filteredRows = useMemo(() => {
     const q = taskSearch.trim().toLowerCase()
-    if (!q) return visibleRows
     return visibleRows.filter((r) => {
+      const status = String(r.status ?? '')
+      const type = String(r.type ?? '')
+      const priority = String(r.priority ?? '')
+      const assignee = String(r.assignee_name ?? '')
+      if (statusFilter !== 'all' && status !== statusFilter) return false
+      if (taskTypeFilter !== 'all' && type !== taskTypeFilter) return false
+      if (priorityFilter !== 'all' && priority !== priorityFilter) return false
+      if (assigneeFilter !== 'all' && assignee !== assigneeFilter) return false
+      if (!q) return true
       const title = String(r.title ?? '').toLowerCase()
       const desc = String(r.description ?? '').toLowerCase()
-      const assignee = String(r.assignee_name ?? '').toLowerCase()
       const creator = String(r.creator_name ?? '').toLowerCase()
-      return title.includes(q) || desc.includes(q) || assignee.includes(q) || creator.includes(q)
+      const assigneeLower = assignee.toLowerCase()
+      return title.includes(q) || desc.includes(q) || assigneeLower.includes(q) || creator.includes(q)
     })
-  }, [visibleRows, taskSearch])
+  }, [assigneeFilter, priorityFilter, statusFilter, taskSearch, taskTypeFilter, visibleRows])
+
+  const assigneeOptions = useMemo(() => {
+    return Array.from(new Set(visibleRows.map((r) => String(r.assignee_name ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [visibleRows])
+
+  const taskTypeOptions = useMemo(() => {
+    return Array.from(new Set(visibleRows.map((r) => String(r.type ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [visibleRows])
 
   function priorityPillClass(p: string): string {
     if (p === 'urgent') return 'priority-pill priority-pill--urgent'
@@ -300,40 +320,6 @@ export function TasksPage() {
         </div>
       ) : null}
 
-      {filteredRows.length > 0 ? (
-        <SectionCard title={t(language, 'tasks.kanbanTitle')}>
-          <div className="tasks-kanban">
-            {(['pending', 'in_progress', 'completed'] as const).map((col) => (
-              <div key={col} className="tasks-kanban__col">
-                <div className="tasks-kanban__head">
-                  {col === 'pending'
-                    ? t(language, 'tasks.kanbanColPending')
-                    : col === 'in_progress'
-                      ? t(language, 'tasks.kanbanColProgress')
-                      : t(language, 'tasks.kanbanColDone')}
-                </div>
-                {filteredRows
-                  .filter((r) => String(r.status ?? '') === col)
-                  .map((r) => (
-                    <div
-                      key={String(r.id)}
-                      className={`tasks-kanban__card ${r.created_by_super_admin ? 'tasks-kanban__card--hot' : ''}`}
-                    >
-                      {r.created_by_super_admin ? (
-                        <div className="tasks-kanban__hot-tag" aria-label={t(language, 'tasks.superAdminTask')}>
-                          🔥 {t(language, 'tasks.superAdminTaskShort')}
-                        </div>
-                      ) : null}
-                      <strong>{String(r.title)}</strong>
-                      <div className="muted type-caption">{taskTypeLabel(language, String(r.type))}</div>
-                    </div>
-                  ))}
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      ) : null}
-
       <SectionCard title={t(language, 'tasks.listTitle')}>
         <input
           type="search"
@@ -343,6 +329,63 @@ export function TasksPage() {
           onChange={(e) => setTaskSearch(e.target.value)}
           aria-label={t(language, 'tasks.searchPlaceholder')}
         />
+        <div className="row-actions" style={{ flexWrap: 'wrap', marginTop: 10 }}>
+          <label>
+            <span className="type-caption">{t(language, 'tasks.filterStatus')}</span>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="all">{t(language, 'tasks.filterAll')}</option>
+              <option value="pending">{taskStatLabel(language, 'pending')}</option>
+              <option value="in_progress">{taskStatLabel(language, 'in_progress')}</option>
+              <option value="completed">{taskStatLabel(language, 'completed')}</option>
+              <option value="cancelled">{taskStatLabel(language, 'cancelled')}</option>
+            </select>
+          </label>
+          <label>
+            <span className="type-caption">{t(language, 'tasks.filterType')}</span>
+            <select value={taskTypeFilter} onChange={(e) => setTaskTypeFilter(e.target.value)}>
+              <option value="all">{t(language, 'tasks.filterAll')}</option>
+              {taskTypeOptions.map((tt) => (
+                <option key={tt} value={tt}>
+                  {taskTypeLabel(language, tt)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="type-caption">{t(language, 'tasks.filterPriority')}</span>
+            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+              <option value="all">{t(language, 'tasks.filterAll')}</option>
+              <option value="low">{priorityLabel(language, 'low')}</option>
+              <option value="medium">{priorityLabel(language, 'medium')}</option>
+              <option value="high">{priorityLabel(language, 'high')}</option>
+              <option value="urgent">{priorityLabel(language, 'urgent')}</option>
+            </select>
+          </label>
+          <label>
+            <span className="type-caption">{t(language, 'tasks.filterAssignee')}</span>
+            <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
+              <option value="all">{t(language, 'tasks.filterAll')}</option>
+              {assigneeOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={() => {
+              setTaskSearch('')
+              setStatusFilter('all')
+              setTaskTypeFilter('all')
+              setPriorityFilter('all')
+              setAssigneeFilter('all')
+            }}
+          >
+            {t(language, 'tasks.clearFilters')}
+          </button>
+        </div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {Array.from({ length: 6 }).map((_, i) => (
