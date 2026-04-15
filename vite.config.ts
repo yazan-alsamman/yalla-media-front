@@ -1,8 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Deploy / dev under folder "Yalla media" → URL segment Yalla%20media
-const APP_BASE = '/Yalla%20media/'
+const APP_BASE = process.env.VITE_APP_BASE || '/'
 
 // https://vite.dev/config/
 export default defineConfig({
