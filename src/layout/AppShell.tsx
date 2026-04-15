@@ -12,6 +12,8 @@ import {
   Megaphone,
   MonitorSmartphone,
   Moon,
+  PanelRightClose,
+  PanelRightOpen,
   Plug,
   Radar,
   Smartphone,
@@ -22,7 +24,8 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAppContext } from '../context/AppContext'
 import { getNavKeys } from '../lib/staffConfig'
 import { publicUrl } from '../lib/publicUrl'
@@ -61,11 +64,34 @@ const navGroups: { labelKey: string; keys: string[] }[] = [
 
 export function AppShell() {
   const { role, theme, setTheme, unreadNotificationCount, pendingTaskInboxCount, logout, language, currentUser } = useAppContext()
+  const location = useLocation()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const allowed = getNavKeys(role, currentUser?.employee_type)
+
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 1024) setSidebarOpen(false)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSidebarOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [sidebarOpen])
 
   return (
     <div className="app-shell app-shell--rtl">
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
         <div className="brand">
           <img src={publicUrl('logo.png')} alt="" className="brand__logo" width={44} height={44} />
           <div>
@@ -74,7 +100,7 @@ export function AppShell() {
           </div>
         </div>
 
-        <nav className="sidebar__nav" aria-label="Main">
+        <nav id="sidebar-nav" className="sidebar__nav" aria-label="Main">
           {navGroups.map((group) => {
             const items = links.filter((item) => group.keys.includes(item.key) && allowed.includes(item.key))
             if (items.length === 0) return null
@@ -99,9 +125,26 @@ export function AppShell() {
           })}
         </nav>
       </aside>
+      <button
+        type="button"
+        className={`sidebar-backdrop ${sidebarOpen ? 'sidebar-backdrop--open' : ''}`}
+        aria-label={language === 'ar' ? 'إغلاق الشريط الجانبي' : 'Close sidebar'}
+        aria-hidden={!sidebarOpen}
+        onClick={() => setSidebarOpen(false)}
+      />
 
       <main className="content-area">
         <header className="topbar">
+          <button
+            type="button"
+            className="icon-btn icon-btn--plain mobile-sidebar-toggle"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label={sidebarOpen ? (language === 'ar' ? 'إغلاق القائمة' : 'Close menu') : language === 'ar' ? 'فتح القائمة' : 'Open menu'}
+            aria-expanded={sidebarOpen}
+            aria-controls="sidebar-nav"
+          >
+            {sidebarOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
+          </button>
           <div className="topbar__controls topbar__controls--right">
             <NavLink
               to="/notifications"

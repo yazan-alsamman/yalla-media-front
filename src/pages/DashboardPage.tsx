@@ -182,6 +182,13 @@ export function DashboardPage() {
   const [dashCampaignRows, setDashCampaignRows] = useState<DashboardCampaignRow[]>([])
   const [dashCampLoading, setDashCampLoading] = useState(false)
   const [campaignNameQuery, setCampaignNameQuery] = useState('')
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 640 : false))
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -571,7 +578,8 @@ export function DashboardPage() {
       )}
 
       {(role === 'admin' || role === 'super_admin') && clientAlerts ? (
-        <SectionCard title={t(language, 'dashboard.alertsTitle')} description={t(language, 'dashboard.alertsSubtitle')}>
+        <div className="dashboard-alert-panel">
+          <SectionCard title={t(language, 'dashboard.alertsTitle')} description={t(language, 'dashboard.alertsSubtitle')}>
           <HelpHint
             language={language}
             titleKey="dashboard.alertsHelpTitle"
@@ -654,7 +662,8 @@ export function DashboardPage() {
               {t(language, 'dashboard.alertCampaignRiskEmpty')}
             </p>
           ) : null}
-        </SectionCard>
+          </SectionCard>
+        </div>
       ) : null}
       {role === 'employee' && employeeDash ? (
         <p className="type-caption" style={{ marginTop: -4 }}>
@@ -742,7 +751,7 @@ export function DashboardPage() {
                 {language === 'ar' ? 'لا توجد بيانات كافية للرسم بعد.' : 'Not enough data to plot this chart yet.'}
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={isMobile ? 220 : 280}>
                 <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="4 6" stroke={gridStroke} vertical={false} />
                   <XAxis dataKey="month" stroke={axisStroke} tickLine={false} axisLine={{ stroke: gridStroke }} tick={{ fontSize: 12 }} />
@@ -793,7 +802,7 @@ export function DashboardPage() {
                 {language === 'ar' ? 'لا حملات لعرض التوزيع بعد.' : 'No campaigns yet to show status distribution.'}
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={isMobile ? 240 : 300}>
                 <PieChart>
                   <Pie
                     data={pieData}
